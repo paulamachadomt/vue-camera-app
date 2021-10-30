@@ -40,8 +40,34 @@ export function usePhotoGallery() {
 
   //const { Camera, Filesystem } = Plugins;
   const photos = ref<UserPhoto[]>([]);
-  // const PHOTO_STORAGE = 'photos';
+  const PHOTO_STORAGE = 'photos';
    
+  const cachePhotos = () => {
+    Storage.set({
+      key: PHOTO_STORAGE,
+      value: JSON.stringify(photos.value)
+    });
+  };
+
+  watch(photos, cachePhotos);
+
+    const loadSaved = async () => {
+      const photoList = await Storage.get({ key: PHOTO_STORAGE });
+      const photosInStorage = photoList.value ? JSON.parse(photoList.value) : [];
+    
+      for (const photo of photosInStorage) {
+        const file = await Filesystem.readFile({
+            path: photo.filepath,
+            directory: Directory.Data
+        });
+        photo.webviewPath = `data:image/jpeg;base64,${file.data}`;
+      }
+  
+      photos.value = photosInStorage;
+  }
+
+  onMounted(loadSaved);
+
   const takePhoto = async () => {
     const cameraPhoto = await Camera.getPhoto({
       resultType: CameraResultType.Uri,
@@ -56,8 +82,21 @@ export function usePhotoGallery() {
         
   };
 
+  const deletePhoto = async (photo: UserPhoto) => {
+    // Remove this photo from the Photos reference data array
+    photos.value = photos.value.filter((p) => p.filepath !== photo.filepath);
+
+    // delete photo file from filesystem
+    const filename = photo.filepath.substr(photo.filepath.lastIndexOf('/') + 1);
+    await Filesystem.deleteFile({
+      path: filename,
+      directory: Directory.Data,
+    });
+  };
+
   return {
     photos,
-    takePhoto
+    takePhoto,
+    deletePhoto
   };
 }
